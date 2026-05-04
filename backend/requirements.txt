@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+tensorflow
+numpy
+librosa
+soundfile
+opencv-python-headless
+python-multipart
+scikit-learn
+gdown
