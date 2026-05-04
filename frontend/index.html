@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Multimodal Emotion Recognition</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg:       #0a0c10;
+    --surface:  #111318;
+    --card:     #161a22;
+    --border:   #232838;
+    --accent:   #4f8cff;
+    --accent2:  #a78bfa;
+    --green:    #34d399;
+    --amber:    #fbbf24;
+    --red:      #f87171;
+    --teal:     #22d3ee;
+    --text:     #e8eaf0;
+    --muted:    #6b7280;
+    --mono:     'Space Mono', monospace;
+    --sans:     'DM Sans', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--sans); }
+
+  /* ── LAYOUT ── */
+  body { display: flex; flex-direction: column; min-height: 100vh; }
+
+  header {
+    padding: 24px 40px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .logo { font-family: var(--mono); font-size: 13px; color: var(--accent); letter-spacing: 0.12em; text-transform: uppercase; }
+  .title-block h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; }
+  .title-block p  { font-size: 13px; color: var(--muted); margin-top: 2px; }
+  .badge { font-family: var(--mono); font-size: 11px; padding: 4px 10px; border-radius: 4px;
+           background: rgba(79,140,255,0.12); color: var(--accent); border: 1px solid rgba(79,140,255,0.3); }
+
+  main { flex: 1; padding: 32px 40px; max-width: 1280px; margin: 0 auto; width: 100%; }
+
+  /* ── GRID ── */
+  .modalities { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 24px; }
+  .fusion-row  { display: grid; grid-template-columns: 1fr 320px; gap: 20px; }
+
+  /* ── CARDS ── */
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  .card:hover { border-color: #2e3650; }
+  .card.active { border-color: var(--accent); box-shadow: 0 0 0 1px rgba(79,140,255,0.15); }
+
+  .card-header {
+    padding: 14px 18px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .card-icon {
+    width: 28px; height: 28px; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center; font-size: 14px;
+  }
+  .icon-face   { background: rgba(79,140,255,0.15); }
+  .icon-speech { background: rgba(167,139,250,0.15); }
+  .icon-text   { background: rgba(52,211,153,0.15); }
+  .icon-fuse   { background: rgba(251,191,36,0.15); }
+
+  .card-title { font-size: 13px; font-weight: 600; flex: 1; }
+  .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--border); transition: background 0.3s; }
+  .status-dot.ready   { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .status-dot.loading { background: var(--amber); animation: pulse 1s infinite; }
+  .status-dot.error   { background: var(--red); }
+
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  .card-body { padding: 16px 18px; }
+
+  /* ── WEBCAM ── */
+  #webcam-container { position: relative; width: 100%; aspect-ratio: 4/3;
+    background: #0d0f14; border-radius: 8px; overflow: hidden; margin-bottom: 12px; }
+  #webcam { width: 100%; height: 100%; object-fit: cover; display: block; }
+  #webcam-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: rgba(10,12,16,0.85); font-size: 12px; color: var(--muted); text-align: center;
+    gap: 6px; flex-direction: column; }
+  #webcam-overlay svg { opacity: 0.4; }
+  .overlay-hidden { display: none !important; }
+
+  /* face box */
+  #face-canvas { position: absolute; inset: 0; pointer-events: none; }
+
+  /* ── AUDIO ── */
+  .audio-viz { width: 100%; height: 60px; background: #0d0f14; border-radius: 8px;
+    margin-bottom: 12px; display: flex; align-items: center; justify-content: center; gap: 3px; padding: 0 12px; }
+  .bar { width: 4px; border-radius: 2px; background: var(--accent2); transition: height 0.08s; }
+
+  /* ── TEXT ── */
+  textarea {
+    width: 100%; height: 80px; background: #0d0f14; border: 1px solid var(--border);
+    color: var(--text); font-family: var(--sans); font-size: 13px;
+    border-radius: 8px; padding: 10px 12px; resize: none; outline: none;
+    margin-bottom: 12px; transition: border-color 0.2s;
+  }
+  textarea:focus { border-color: var(--accent); }
+
+  /* ── BUTTONS ── */
+  .btn {
+    font-family: var(--sans); font-size: 12px; font-weight: 600;
+    padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px; transition: all 0.15s;
+    letter-spacing: 0.02em;
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: #6b9fff; }
+  .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+  .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-danger { background: rgba(248,113,113,0.15); color: var(--red); border: 1px solid rgba(248,113,113,0.3); }
+  .btn-danger:hover { background: rgba(248,113,113,0.25); }
+  .btn-amber { background: rgba(251,191,36,0.15); color: var(--amber); border: 1px solid rgba(251,191,36,0.3); }
+  .btn-amber:hover { background: rgba(251,191,36,0.25); }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  /* ── RESULT PANEL ── */
+  .result-panel { margin-top: 14px; }
+  .result-label { font-family: var(--mono); font-size: 10px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 8px; }
+  .emotion-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 12px; border-radius: 6px; font-size: 14px; font-weight: 600;
+    border: 1px solid transparent; margin-bottom: 10px;
+  }
+
+  /* ── CONFIDENCE BARS ── */
+  .conf-list { display: flex; flex-direction: column; gap: 5px; }
+  .conf-item { display: grid; grid-template-columns: 72px 1fr 36px; align-items: center; gap: 8px; }
+  .conf-name { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+  .conf-track { height: 5px; background: var(--surface); border-radius: 3px; overflow: hidden; }
+  .conf-fill  { height: 100%; border-radius: 3px; transition: width 0.5s ease; }
+  .conf-val   { font-size: 10px; color: var(--muted); font-family: var(--mono); text-align: right; }
+
+  /* ── FUSION PANEL ── */
+  .fusion-main { padding: 20px; }
+  .fusion-method { display: flex; gap: 8px; margin-bottom: 20px; }
+  .method-btn {
+    flex: 1; padding: 8px; border-radius: 6px; font-size: 11px; font-weight: 600;
+    font-family: var(--mono); border: 1px solid var(--border); background: var(--surface);
+    color: var(--muted); cursor: pointer; transition: all 0.15s; text-align: center;
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .method-btn.active { border-color: var(--amber); color: var(--amber); background: rgba(251,191,36,0.1); }
+
+  .final-emotion {
+    text-align: center; padding: 24px 16px;
+    background: var(--surface); border-radius: 10px;
+    border: 1px solid var(--border); margin-bottom: 16px;
+  }
+  .final-emoji { font-size: 40px; margin-bottom: 8px; display: block; }
+  .final-label { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 4px; }
+  .final-method { font-family: var(--mono); font-size: 10px; color: var(--muted); text-transform: uppercase; }
+
+  /* ── MODALITY SUMMARY ── */
+  .modality-summary { display: flex; flex-direction: column; gap: 8px; }
+  .mod-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px; background: var(--surface); border-radius: 6px;
+    border: 1px solid var(--border);
+  }
+  .mod-icon { font-size: 14px; width: 22px; text-align: center; }
+  .mod-name { font-size: 11px; color: var(--muted); width: 52px; font-family: var(--mono); }
+  .mod-emotion { font-size: 12px; font-weight: 600; flex: 1; }
+  .mod-conf { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+  .mod-pending { font-size: 11px; color: var(--muted); font-style: italic; flex: 1; }
+
+  /* ── LOG ── */
+  .log-area {
+    background: #0d0f14; border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 14px; font-family: var(--mono); font-size: 11px;
+    color: var(--muted); max-height: 90px; overflow-y: auto;
+    display: flex; flex-direction: column; gap: 3px;
+  }
+  .log-line { display: flex; gap: 8px; }
+  .log-time { color: #3d4460; }
+  .log-ok   { color: var(--green); }
+  .log-err  { color: var(--red); }
+  .log-info { color: var(--accent); }
+
+  /* ── FOOTER ── */
+  footer {
+    padding: 14px 40px; border-top: 1px solid var(--border);
+    display: flex; align-items: center; gap: 12px;
+    font-size: 11px; color: var(--muted); font-family: var(--mono);
+  }
+  .server-status { display: flex; align-items: center; gap: 6px; }
+  #server-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); }
+  #server-dot.online { background: var(--green); }
+
+  /* emotion color helpers */
+  .e-happy    { color: var(--amber); border-color: rgba(251,191,36,0.3); background: rgba(251,191,36,0.1); }
+  .e-sad      { color: #60a5fa;      border-color: rgba(96,165,250,0.3);  background: rgba(96,165,250,0.1); }
+  .e-angry    { color: var(--red);   border-color: rgba(248,113,113,0.3); background: rgba(248,113,113,0.1); }
+  .e-fear     { color: var(--accent2);border-color:rgba(167,139,250,0.3); background: rgba(167,139,250,0.1); }
+  .e-disgust  { color: var(--teal);  border-color: rgba(34,211,238,0.3);  background: rgba(34,211,238,0.1); }
+  .e-surprise { color: var(--green); border-color: rgba(52,211,153,0.3);  background: rgba(52,211,153,0.1); }
+  .e-neutral  { color: var(--muted); border-color: rgba(107,114,128,0.3); background: rgba(107,114,128,0.1); }
+
+  .fill-happy    { background: var(--amber); }
+  .fill-sad      { background: #60a5fa; }
+  .fill-angry    { background: var(--red); }
+  .fill-fear     { background: var(--accent2); }
+  .fill-disgust  { background: var(--teal); }
+  .fill-surprise { background: var(--green); }
+  .fill-neutral  { background: var(--muted); }
+
+  @media (max-width: 900px) {
+    .modalities { grid-template-columns: 1fr; }
+    .fusion-row { grid-template-columns: 1fr; }
+    main { padding: 20px; }
+    header { padding: 16px 20px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="logo">Trisense.AI</div>
+    <div class="title-block">
+      <h1>Multimodal Emotion Recognition</h1>
+      <p>Comparative Study · FER2013 · RAVDESS · Text Model</p>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px">
+    <span class="badge">v1.0 · Deep Learning</span>
+  </div>
+</header>
+
+<main>
+
+  <!-- ── THREE MODALITY CARDS ── -->
+  <div class="modalities">
+
+    <!-- FACE -->
+    <div class="card" id="face-card">
+      <div class="card-header">
+        <div class="card-icon icon-face">🎭</div>
+        <span class="card-title">Facial Emotion</span>
+        <span class="status-dot" id="face-dot"></span>
+      </div>
+      <div class="card-body">
+        <div id="webcam-container">
+          <video id="webcam" autoplay muted playsinline></video>
+          <canvas id="face-canvas"></canvas>
+          <div id="webcam-overlay">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M15 10c0 1.65-1.35 3-3 3S9 11.65 9 10s1.35-3 3-3 3 1.35 3 3z"/>
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/>
+            </svg>
+            <span>Camera inactive</span>
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="startCamera()">▶ Start camera</button>
+          <button class="btn btn-secondary" id="capture-btn" onclick="captureAndPredict()" disabled>📸 Capture</button>
+          <button class="btn btn-danger" id="stop-cam-btn" onclick="stopCamera()" style="display:none">■ Stop</button>
+        </div>
+        <div class="result-panel" id="face-result" style="display:none"></div>
+      </div>
+    </div>
+
+    <!-- SPEECH -->
+    <div class="card" id="speech-card">
+      <div class="card-header">
+        <div class="card-icon icon-speech">🎙️</div>
+        <span class="card-title">Speech Emotion</span>
+        <span class="status-dot" id="speech-dot"></span>
+      </div>
+      <div class="card-body">
+        <div class="audio-viz" id="audio-viz">
+          <!-- bars injected by JS -->
+        </div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:12px;text-align:center" id="rec-status">
+          Press record, speak for 3 seconds, then stop
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" id="record-btn" onclick="startRecording()">🎙 Record</button>
+          <button class="btn btn-danger"  id="stop-rec-btn" onclick="stopRecording()" disabled>■ Stop</button>
+          <button class="btn btn-secondary" id="predict-audio-btn" onclick="predictSpeech()" disabled>⚡ Analyse</button>
+        </div>
+        <div class="result-panel" id="speech-result" style="display:none"></div>
+      </div>
+    </div>
+
+    <!-- TEXT -->
+    <div class="card" id="text-card">
+      <div class="card-header">
+        <div class="card-icon icon-text">💬</div>
+        <span class="card-title">Text Emotion</span>
+        <span class="status-dot" id="text-dot"></span>
+      </div>
+      <div class="card-body">
+        <textarea id="text-input" placeholder="Type something expressing an emotion...
+e.g. 'I can't believe how amazing today was!'" maxlength="500"></textarea>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:12px;text-align:right" id="char-count">0 / 500</div>
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="predictText()">⚡ Analyse text</button>
+          <button class="btn btn-secondary" onclick="clearText()">✕ Clear</button>
+        </div>
+        <div class="result-panel" id="text-result" style="display:none"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── FUSION ROW ── -->
+  <div class="fusion-row">
+
+    <!-- FUSION PANEL -->
+    <div class="card" id="fuse-card">
+      <div class="card-header">
+        <div class="card-icon icon-fuse">⚡</div>
+        <span class="card-title">Multimodal Fusion</span>
+        <span class="status-dot" id="fuse-dot"></span>
+      </div>
+      <div class="fusion-main">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Fusion method</div>
+        <div class="fusion-method">
+          <div class="method-btn active" id="method-weighted" onclick="setMethod('weighted')">Weighted avg</div>
+          <div class="method-btn" id="method-majority" onclick="setMethod('majority')">Majority vote</div>
+        </div>
+
+        <div class="final-emotion" id="final-emotion-display">
+          <span class="final-emoji">🤔</span>
+          <div class="final-label" style="color:var(--muted)">Awaiting inputs</div>
+          <div class="final-method">— run at least one modality —</div>
+        </div>
+
+        <div class="btn-row" style="margin-bottom:16px">
+          <button class="btn btn-amber" onclick="runFusion()" style="flex:1">⚡ Run fusion</button>
+          <button class="btn btn-secondary" onclick="resetAll()">↺ Reset</button>
+        </div>
+
+        <div class="result-panel" id="fusion-scores" style="display:none"></div>
+      </div>
+    </div>
+
+    <!-- MODALITY SUMMARY + LOG -->
+    <div style="display:flex;flex-direction:column;gap:20px">
+
+      <div class="card">
+        <div class="card-header">
+          <span style="font-size:12px">📊</span>
+          <span class="card-title">Current predictions</span>
+        </div>
+        <div class="card-body">
+          <div class="modality-summary">
+            <div class="mod-row" id="sum-face">
+              <span class="mod-icon">🎭</span>
+              <span class="mod-name">face</span>
+              <span class="mod-pending">no result yet</span>
+            </div>
+            <div class="mod-row" id="sum-speech">
+              <span class="mod-icon">🎙️</span>
+              <span class="mod-name">speech</span>
+              <span class="mod-pending">no result yet</span>
+            </div>
+            <div class="mod-row" id="sum-text">
+              <span class="mod-icon">💬</span>
+              <span class="mod-name">text</span>
+              <span class="mod-pending">no result yet</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span style="font-size:12px">📋</span>
+          <span class="card-title">Activity log</span>
+        </div>
+        <div class="card-body" style="padding:12px 14px">
+          <div class="log-area" id="log-area"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</main>
+
+<footer>
+  <div class="server-status">
+    <div id="server-dot"></div>
+    <span id="server-label">Checking server...</span>
+  </div>
+  <span>·</span>
+  <span>Backend: <code id="api-url-display">https://protest-large-comparative-antique.trycloudflare.com</code></span>
+  <span>·</span>
+  <span>FER2013 · RAVDESS · Text Model</span>
+</footer>
+
+<script>
+// ─────────────────────────────────────────
+// CONFIG
+// ─────────────────────────────────────────
+const API = "https://syndicate-moreover-headed-tribal.trycloudflare.com";
+
+const EMOTION_EMOJI = {
+  Happy: "😄", Sad: "😢", Angry: "😠", Fear: "😨",
+  Disgust: "🤢", Surprise: "😲", Neutral: "😐"
+};
+const EMOTION_CLASS = {
+  Happy:"e-happy", Sad:"e-sad", Angry:"e-angry", Fear:"e-fear",
+  Disgust:"e-disgust", Surprise:"e-surprise", Neutral:"e-neutral"
+};
+const FILL_CLASS = {
+  Happy:"fill-happy", Sad:"fill-sad", Angry:"fill-angry", Fear:"fill-fear",
+  Disgust:"fill-disgust", Surprise:"fill-surprise", Neutral:"fill-neutral"
+};
+
+let fuseMethod = "weighted";
+let currentResults = { face: null, speech: null, text: null };
+
+let stream = null;
+let mediaRecorder = null;
+let audioChunks = [];
+let audioBlob = null;
+let analyserNode = null;
+let animFrame = null;
+
+// ─────────────────────────────────────────
+// LOG
+// ─────────────────────────────────────────
+function log(msg, type="info") {
+  const area = document.getElementById("log-area");
+  const now = new Date().toLocaleTimeString("en",{hour12:false,hour:"2-digit",minute:"2-digit",second:"2-digit"});
+  const div = document.createElement("div");
+  div.className = "log-line";
+  div.innerHTML = `<span class="log-time">${now}</span><span class="log-${type}">${msg}</span>`;
+  area.appendChild(div);
+  area.scrollTop = area.scrollHeight;
+}
+
+// ─────────────────────────────────────────
+// SERVER HEALTH CHECK
+// ─────────────────────────────────────────
+async function checkServer() {
+  try {
+    const r = await fetch(`${API}/health`, {signal: AbortSignal.timeout(3000)});
+    if (r.ok) {
+      document.getElementById("server-dot").className = "online";
+      document.getElementById("server-label").textContent = "Server online";
+      log("Backend connected at " + API, "ok");
+    }
+  } catch {
+    document.getElementById("server-label").textContent = "Server offline – start backend first";
+    log("Backend not reachable at " + API, "err");
+  }
+}
+
+// ─────────────────────────────────────────
+// RESULT RENDERER
+// ─────────────────────────────────────────
+function renderResult(panelId, data) {
+  const panel = document.getElementById(panelId);
+  const emotion = data.emotion;
+  const scores = data.scores || {};
+  const conf = data.confidence != null ? Math.round(data.confidence * 100) : Math.round((scores[emotion]||0)*100);
+  const cls = EMOTION_CLASS[emotion] || "e-neutral";
+  const fillCls = FILL_CLASS[emotion] || "fill-neutral";
+  const emoji = EMOTION_EMOJI[emotion] || "🤔";
+
+  const sorted = Object.entries(scores).sort((a,b) => b[1]-a[1]);
+  const bars = sorted.map(([e,v]) => `
+    <div class="conf-item">
+      <span class="conf-name">${e}</span>
+      <div class="conf-track"><div class="conf-fill ${FILL_CLASS[e]||'fill-neutral'}" style="width:${Math.round(v*100)}%"></div></div>
+      <span class="conf-val">${Math.round(v*100)}%</span>
+    </div>`).join("");
+
+  panel.innerHTML = `
+    <div class="result-label">Prediction</div>
+    <div class="emotion-badge ${cls}">${emoji} ${emotion} <span style="opacity:.6;font-size:11px">${conf}%</span></div>
+    <div class="result-label">Confidence breakdown</div>
+    <div class="conf-list">${bars}</div>`;
+  panel.style.display = "block";
+}
+
+function updateSummary(modality, data) {
+  const row = document.getElementById(`sum-${modality}`);
+  const emotion = data.emotion;
+  const conf = data.confidence != null ? Math.round(data.confidence*100)
+    : Math.round(((data.scores||{})[emotion]||0)*100);
+  const cls = EMOTION_CLASS[emotion] || "e-neutral";
+  const emoji = EMOTION_EMOJI[emotion] || "🤔";
+  // remove old pending/emotion spans
+  const pending = row.querySelector(".mod-pending");
+  const emo = row.querySelector(".mod-emotion");
+  const confEl = row.querySelector(".mod-conf");
+  if(pending) pending.remove();
+  if(emo) emo.remove();
+  if(confEl) confEl.remove();
+  const icons = row.querySelectorAll(".mod-icon, .mod-name");
+  row.innerHTML = "";
+  row.innerHTML = `
+    <span class="mod-icon">${row.dataset.icon||emoji}</span>
+    <span class="mod-name">${modality}</span>
+    <span class="mod-emotion ${cls}">${emoji} ${emotion}</span>
+    <span class="mod-conf">${conf}%</span>`;
+}
+
+// ─────────────────────────────────────────
+// WEBCAM
+// ─────────────────────────────────────────
+async function startCamera() {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({video: {width:320, height:240}});
+    const video = document.getElementById("webcam");
+    video.srcObject = stream;
+    document.getElementById("webcam-overlay").classList.add("overlay-hidden");
+    document.getElementById("capture-btn").disabled = false;
+    document.getElementById("stop-cam-btn").style.display = "";
+    document.getElementById("face-card").classList.add("active");
+    setDot("face", "ready");
+    log("Camera started", "ok");
+  } catch(e) {
+    log("Camera error: " + e.message, "err");
+    setDot("face","error");
+  }
+}
+
+function stopCamera() {
+  if(stream) { stream.getTracks().forEach(t=>t.stop()); stream = null; }
+  document.getElementById("webcam").srcObject = null;
+  document.getElementById("webcam-overlay").classList.remove("overlay-hidden");
+  document.getElementById("capture-btn").disabled = true;
+  document.getElementById("stop-cam-btn").style.display = "none";
+  document.getElementById("face-card").classList.remove("active");
+  setDot("face","");
+  log("Camera stopped", "info");
+}
+
+async function captureAndPredict() {
+  const video = document.getElementById("webcam");
+  const canvas = document.createElement("canvas");
+  canvas.width = 48; canvas.height = 48;
+  canvas.getContext("2d").drawImage(video, 0, 0, 48, 48);
+  canvas.toBlob(async (blob) => {
+    setDot("face","loading");
+    log("Sending face image to /predict/face...", "info");
+    try {
+      const fd = new FormData();
+      fd.append("file", blob, "frame.png");
+      const r = await fetch(`${API}/predict/face`, {method:"POST", body:fd});
+      if(!r.ok) throw new Error(await r.text());
+      const data = await r.json();
+      currentResults.face = data.scores;
+      renderResult("face-result", data);
+      updateSummary("face", data);
+      setDot("face","ready");
+      log(`Face → ${data.emotion} (${Math.round((data.confidence||0)*100)}%)`, "ok");
+    } catch(e) {
+      setDot("face","error");
+      log("Face error: " + e.message, "err");
+    }
+  }, "image/png");
+}
+
+// ─────────────────────────────────────────
+// AUDIO VIZ
+// ─────────────────────────────────────────
+function buildBars() {
+  const viz = document.getElementById("audio-viz");
+  viz.innerHTML = "";
+  for(let i=0;i<28;i++){
+    const b = document.createElement("div");
+    b.className="bar"; b.style.height="6px";
+    viz.appendChild(b);
+  }
+}
+
+function animateBars(analyser) {
+  const bars = document.querySelectorAll("#audio-viz .bar");
+  const buf = new Uint8Array(analyser.frequencyBinCount);
+  function frame() {
+    analyser.getByteFrequencyData(buf);
+    bars.forEach((b,i) => {
+      const val = buf[Math.floor(i * buf.length / bars.length)];
+      b.style.height = Math.max(6, val * 0.45) + "px";
+    });
+    animFrame = requestAnimationFrame(frame);
+  }
+  frame();
+}
+
+// ─────────────────────────────────────────
+// RECORDING
+// ─────────────────────────────────────────
+async function startRecording() {
+  try {
+    const micStream = await navigator.mediaDevices.getUserMedia({audio:true});
+    const ctx = new AudioContext();
+    analyserNode = ctx.createAnalyser();
+    analyserNode.fftSize = 256;
+    const src = ctx.createMediaStreamSource(micStream);
+    src.connect(analyserNode);
+    animateBars(analyserNode);
+
+    audioChunks = [];
+    mediaRecorder = new MediaRecorder(micStream);
+    mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+    mediaRecorder.onstop = () => {
+      audioBlob = new Blob(audioChunks, {type:"audio/webm"});
+      document.getElementById("predict-audio-btn").disabled = false;
+      document.getElementById("rec-status").textContent = "Recording saved — click Analyse";
+      log("Audio recorded (" + Math.round(audioBlob.size/1024) + " KB)", "ok");
+      cancelAnimationFrame(animFrame);
+      buildBars();
+    };
+    mediaRecorder.start();
+    document.getElementById("record-btn").disabled = true;
+    document.getElementById("stop-rec-btn").disabled = false;
+    document.getElementById("speech-card").classList.add("active");
+    document.getElementById("rec-status").textContent = "🔴 Recording... (speak now)";
+    setDot("speech","loading");
+    log("Recording started", "info");
+  } catch(e) {
+    log("Mic error: " + e.message, "err");
+    setDot("speech","error");
+  }
+}
+
+function stopRecording() {
+  if(mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
+  document.getElementById("record-btn").disabled = false;
+  document.getElementById("stop-rec-btn").disabled = true;
+  setDot("speech","ready");
+}
+
+async function predictSpeech() {
+  if(!audioBlob) { log("No audio recorded", "err"); return; }
+  setDot("speech","loading");
+  log("Sending audio to /predict/speech...", "info");
+  try {
+    const fd = new FormData();
+fd.append("file", audioBlob, "recording.webm");
+
+const r = await fetch(`${API}/predict/speech`, {
+    method: "POST",
+    body: fd
+});
+
+if(!r.ok) throw new Error(await r.text());
+
+const data = await r.json();;
+    currentResults.speech = data.scores;
+    renderResult("speech-result", data);
+    updateSummary("speech", data);
+    setDot("speech","ready");
+    log(`Speech → ${data.emotion} (${Math.round((data.confidence||0)*100)}%)`, "ok");
+  } catch(e) {
+    setDot("speech","error");
+    log("Speech error: " + e.message, "err");
+  }
+}
+
+// ─────────────────────────────────────────
+// TEXT
+// ─────────────────────────────────────────
+document.addEventListener("DOMContentLoaded", () => {
+  document.getElementById("text-input").addEventListener("input", e => {
+    document.getElementById("char-count").textContent = `${e.target.value.length} / 500`;
+  });
+  buildBars();
+  checkServer();
+});
+
+async function predictText() {
+    const text = document.getElementById("text-input").value.trim();
+
+    if (!text) {
+        log("Please enter some text", "err");
+        return;
+    }
+
+    setDot("text", "loading");
+
+    try {
+        const response = await fetch(`${API}/predict/text`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ text: text })
+        });
+
+        const data = await response.json();
+	console.log("TEXT RESPONSE:", data);
+
+        currentResults.text = data.scores;
+
+        // 🔥 DIRECT DISPLAY FIX
+        document.getElementById("text-result").innerText =
+            data.emotion + " (" + Math.round((data.confidence || 0) * 100) + "%)";
+
+        document.getElementById("text-result").style.display = "block";
+
+        updateSummary("text", data);
+
+        setDot("text", "ready");
+
+        log(`Text → ${data.emotion}`, "ok");
+
+    } catch (e) {
+        setDot("text", "error");
+        log("Text error: " + e.message, "err");
+    }
+}function clearText() {
+  document.getElementById("text-input").value = "";
+  document.getElementById("char-count").textContent = "0 / 500";
+  document.getElementById("text-result").style.display = "none";
+  document.getElementById("text-card").classList.remove("active");
+  setDot("text","");
+  currentResults.text = null;
+}
+
+// ─────────────────────────────────────────
+// FUSION
+// ─────────────────────────────────────────
+function setMethod(m) {
+  fuseMethod = m;
+  document.getElementById("method-weighted").classList.toggle("active", m==="weighted");
+  document.getElementById("method-majority").classList.toggle("active", m==="majority");
+}
+
+async function runFusion() {
+  const present = Object.entries(currentResults).filter(([,v])=>v!==null);
+  if(present.length === 0){ log("Run at least one modality first", "err"); return; }
+  setDot("fuse","loading");
+  log(`Running fusion (${fuseMethod}) on ${present.map(([k])=>k).join(", ")}...`, "info");
+  try {
+    const body = { method: fuseMethod };
+    present.forEach(([k,v])=>{ body[k] = v; });
+    const r = await fetch(`${API}/predict/fuse`, {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify(body)
+    });
+    if(!r.ok) throw new Error(await r.text());
+    const data = await r.json();
+
+    const emotion = data.emotion;
+    const emoji = EMOTION_EMOJI[emotion] || "🤔";
+    const cls = EMOTION_CLASS[emotion] || "e-neutral";
+    const display = document.getElementById("final-emotion-display");
+    display.innerHTML = `
+      <span class="final-emoji">${emoji}</span>
+      <div class="final-label ${cls}">${emotion}</div>
+      <div class="final-method">${fuseMethod === "weighted" ? "weighted average" : "majority vote"} · ${data.modalities_used.join(", ")}</div>`;
+
+    // also render score bars in fusion panel
+    renderResult("fusion-scores", {emotion, scores: data.scores, confidence: (data.scores||{})[emotion]});
+    setDot("fuse","ready");
+    document.getElementById("fuse-card").classList.add("active");
+    log(`Fused result → ${emotion}`, "ok");
+  } catch(e) {
+    setDot("fuse","error");
+    log("Fusion error: " + e.message, "err");
+  }
+}
+
+// ─────────────────────────────────────────
+// HELPERS
+// ─────────────────────────────────────────
+function setDot(id, state) {
+  const dot = document.getElementById(`${id}-dot`);
+  if(!dot) return;
+  dot.className = "status-dot" + (state ? " " + state : "");
+}
+
+function resetAll() {
+  currentResults = {face:null, speech:null, text:null};
+  ["face","speech","text","fuse"].forEach(id => {
+    setDot(id,"");
+    const panel = document.getElementById(`${id}-result`);
+    if(panel) panel.style.display = "none";
+    const card = document.getElementById(`${id}-card`);
+    if(card) card.classList.remove("active");
+  });
+  document.getElementById("fusion-scores").style.display = "none";
+  document.getElementById("final-emotion-display").innerHTML = `
+    <span class="final-emoji">🤔</span>
+    <div class="final-label" style="color:var(--muted)">Awaiting inputs</div>
+    <div class="final-method">— run at least one modality —</div>`;
+  ["face","speech","text"].forEach(m => {
+    const row = document.getElementById(`sum-${m}`);
+    row.innerHTML = `<span class="mod-icon">${{face:"🎭",speech:"🎙️",text:"💬"}[m]}</span>
+      <span class="mod-name">${m}</span><span class="mod-pending">no result yet</span>`;
+  });
+  stopCamera();
+  document.getElementById("text-input").value = "";
+  document.getElementById("char-count").textContent = "0 / 500";
+  audioBlob = null;
+  document.getElementById("predict-audio-btn").disabled = true;
+  document.getElementById("rec-status").textContent = "Press record, speak for 3 seconds, then stop";
+  log("All results cleared", "info");
+}
+</script>
+</body>
+</html>
